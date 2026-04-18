@@ -1,2 +1,12 @@
 langchain-experimental
 rank-bm25
+pinecone
+chromadb
+langchain
+langgraph
+langchain-experimental
+faiss-cpu
+openai
+langchain-groq
+langchain-openai
+pinecone-client
