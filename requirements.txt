@@ -11,3 +11,4 @@ langchain-groq
 langchain-openai
 pinecone-client
 langchain-tavily
+ragas
