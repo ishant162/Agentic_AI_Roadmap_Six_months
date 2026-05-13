@@ -1,0 +1,705 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2869
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 ================================================================\
+AI PRODUCT ENGINEER \'97 INTERVIEW Q&A PREP\
+Based on: Ishant Thakare's Resume + JD\
+================================================================\
+\
+----------------------------------------------------------------\
+SECTION 1: MULTI-AGENT SYSTEM DESIGN\
+----------------------------------------------------------------\
+\
+Q1. Walk me through a multi-agent system you've built.\
+\
+A: In my Test Analysis Framework, I built a LangGraph-based pipeline with distinct agents \'97\
+one for log parsing, one for semantic diagnosis, and one for Jira ticket generation. Each agent\
+had a defined role and communicated via shared state. The orchestrator decided routing based\
+on the output of the previous node. This reduced manual debugging time by 80%.\
+\
+Example:\
+    log_parser_node --> diagnosis_node --> jira_node\
+    Each node reads from and writes to a shared AgentState dict.\
+    The diagnosis node writes \{"diagnosis": "OOM error", "confidence": 0.92\}\
+    and the jira node reads that to auto-fill ticket fields.\
+\
+---\
+\
+Q2. How do you decide when to use a single agent vs. multiple agents?\
+\
+A: Single agent when the task is a focused, single-domain reasoning loop \'97 e.g., summarizing\
+a document. Multiple agents when tasks are parallel, require different expertise, or have clear\
+handoff boundaries. In my health coach project, I split retrieval, reasoning, and action into\
+separate agents because each had distinct tool sets and context requirements. More agents =\
+more complexity, so I default to single unless there's a clear reason to split.\
+\
+Example:\
+    Single agent:  "Summarize this incident report" \uc0\u8594  one LLM call, done.\
+    Multi-agent:   "Triage this alert" \uc0\u8594 \
+                   Agent 1: fetch enrichment data from SIEM\
+                   Agent 2: reason over enriched context\
+                   Agent 3: create ticket + notify on-call\
+\
+---\
+\
+Q3. How do you design agent collaboration \'97 how do agents hand off work?\
+\
+A: In LangGraph, I model handoffs as edges in the state graph. Each agent node writes its\
+output into the shared state dict, and the next node reads from it. For dynamic routing, I use\
+conditional edges where a router function inspects state and returns the next node name.\
+\
+Example:\
+    def route(state):\
+        if state["confidence"] < 0.7:\
+            return "human_review"\
+        return "action_node"\
+\
+    graph.add_conditional_edges("reasoning_node", route)\
+\
+---\
+\
+Q4. How do you prevent agents from going into infinite loops?\
+\
+A: I set a max_iterations counter in the state and check it at the router. If it exceeds the\
+limit, I force-route to a fallback or termination node. LangGraph also supports recursion\
+limits at the graph level via the config parameter.\
+\
+Example:\
+    def route(state):\
+        if state["iterations"] >= 5:\
+            return "fallback_node"\
+        return "reasoning_node"\
+\
+    # Also set at graph level:\
+    app.invoke(input, config=\{"recursion_limit": 10\})\
+\
+---\
+\
+Q5. How would you design a supervisor/orchestrator pattern?\
+\
+A: The supervisor is a central LLM node that receives the task, decides which sub-agent to\
+call next, and evaluates the result. Sub-agents are tools from the supervisor's perspective.\
+The supervisor loops until it decides the task is complete or needs escalation.\
+\
+Example:\
+    Supervisor receives: "Investigate alert #4521"\
+    \uc0\u8594  calls researcher_agent (fetches SIEM data)\
+    \uc0\u8594  calls reasoning_agent (diagnoses root cause)\
+    \uc0\u8594  calls action_agent (creates remediation ticket)\
+    \uc0\u8594  decides: task complete, exit loop.\
+\
+---\
+\
+Q6. How do you handle inter-agent context \'97 what gets passed between agents?\
+\
+A: Only what's necessary. I keep the shared state lean \'97 avoid dumping full conversation\
+history into every node. For long contexts, I summarize or retrieve relevant chunks from\
+memory instead of passing raw data. This keeps latency low and avoids token bloat.\
+\
+Example:\
+    Bad:  state["full_log"] = 50000 token raw log file  \uc0\u8592  passed to every node\
+    Good: state["log_summary"] = "OOM at line 412, service: auth-svc"\
+          state["relevant_chunks"] = top_3_retrieved_snippets\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 2: STATE MANAGEMENT & ORCHESTRATION\
+----------------------------------------------------------------\
+\
+Q7. How does state management work in LangGraph?\
+\
+A: LangGraph uses a TypedDict as the shared state object. Every node receives the full state,\
+modifies its relevant keys, and returns the updated slice. The graph merges updates using\
+reducers (default is overwrite; you can use add for list accumulation).\
+\
+Example:\
+    class AgentState(TypedDict):\
+        messages: Annotated[list, add_messages]\
+        diagnosis: str\
+        confidence: float\
+\
+    def diagnosis_node(state: AgentState):\
+        result = llm.invoke(state["messages"])\
+        return \{"diagnosis": result.content, "confidence": 0.88\}\
+\
+---\
+\
+Q8. How do you persist state across sessions?\
+\
+A: Using a checkpointer. MemorySaver for in-memory (dev/testing), SqliteSaver or\
+PostgresSaver for production persistence. Each run gets a thread_id which acts as the\
+session key.\
+\
+Example:\
+    app = graph.compile(checkpointer=SqliteSaver(conn))\
+\
+    # First run\
+    app.invoke(\{"messages": [HumanMessage("Investigate alert")]\},\
+               config=\{"configurable": \{"thread_id": "session-123"\}\})\
+\
+    # Resume same session later\
+    app.invoke(\{"messages": [HumanMessage("Continue")]\},\
+               config=\{"configurable": \{"thread_id": "session-123"\}\})\
+\
+---\
+\
+Q9. Explain how you'd manage long-running workflows that span hours or days.\
+\
+A: Use a persistent checkpointer (Postgres/SQLite) so the graph state survives restarts.\
+Pair with interrupt_before on nodes that require async inputs (like waiting for human\
+approval or an external API webhook). The graph resumes from the checkpoint once the\
+input arrives \'97 no reprocessing from scratch.\
+\
+Example:\
+    Workflow: generate report \uc0\u8594  wait for manager approval \u8594  send to client\
+    Step 2 might take 6 hours.\
+    Graph pauses at "approval_node" via interrupt_before.\
+    When manager approves via UI, app.update_state() is called and graph resumes\
+    from exactly where it paused \'97 state fully intact.\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 3: MEMORY ARCHITECTURE\
+----------------------------------------------------------------\
+\
+Q10. Explain your memory architecture in the Test Analysis Framework.\
+\
+A: Three layers:\
+- Short-term: in-graph state for current session context\
+- Long-term: ChromaDB for past resolutions and historical error patterns\
+- Global: FAISS for fast similarity search across the full knowledge base\
+\
+On each new failure, the agent queries long-term memory first. If a similar resolution exists,\
+it reuses it. Otherwise it reasons fresh and stores the new resolution back to memory.\
+\
+Example:\
+    New error: "CUDA out of memory during model inference"\
+    \uc0\u8594  Query ChromaDB: finds past resolution "reduce batch size to 16"\
+    \uc0\u8594  Agent applies fix directly, skips LLM reasoning\
+    \uc0\u8594  Saves 2-3 seconds of inference time per repeat error\
+\
+---\
+\
+Q11. What's the difference between short-term and long-term memory in agents?\
+\
+A: Short-term is within a single run \'97 the messages/state in the current graph execution.\
+It's ephemeral. Long-term is cross-run \'97 stored in a vector DB or key-value store, retrieved\
+via semantic search. Long-term memory is what lets an agent "remember" resolutions\
+from weeks ago.\
+\
+Example:\
+    Short-term: Agent remembers earlier in THIS conversation that the alert was severity P1.\
+    Long-term:  Agent remembers that last month, a similar P1 alert on auth-svc\
+                was resolved by restarting the token refresh service.\
+\
+---\
+\
+Q12. How do you handle memory retrieval quality \'97 what if irrelevant memories are fetched?\
+\
+A: I use a CrossEncoder reranker after initial retrieval to re-score candidates by actual\
+relevance to the query. I also set a similarity threshold \'97 below a certain score, the memory\
+is discarded rather than passed to the LLM. This prevents hallucination from noisy context.\
+\
+Example:\
+    Query: "NullPointerException in payment service"\
+    Initial retrieval returns 10 docs (some about DB timeouts \'97 not relevant)\
+    CrossEncoder rescores \uc0\u8594  top 3 are all NullPointer-related\
+    Similarity threshold (0.75) filters out the DB timeout docs\
+    LLM only sees the 3 clean, relevant memories\
+\
+---\
+\
+Q13. What is semantic caching and when would you use it?\
+\
+A: Semantic caching stores LLM responses keyed by embedding of the input query. On a new\
+query, if a semantically similar query exists in cache (cosine similarity above threshold),\
+return the cached response directly \'97 no LLM call. Useful in high-traffic workflows where\
+many queries are paraphrases of the same question.\
+\
+Example:\
+    Query 1: "What caused the auth service to go down?"  \uc0\u8594  LLM call \u8594  cached\
+    Query 2: "Why did auth-svc fail?"                    \uc0\u8594  cache hit (similarity 0.94)\
+                                                         \uc0\u8594  returns cached response instantly\
+    Saves ~1-2s latency and LLM cost on repeat queries.\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 4: RETRIEVAL AUGMENTED GENERATION (RAG)\
+----------------------------------------------------------------\
+\
+Q14. Describe your RAG pipeline.\
+\
+A: I've built hybrid RAG using:\
+- BM25 for keyword/sparse retrieval\
+- Dense embeddings (SentenceTransformers) for semantic retrieval\
+- RRF (Reciprocal Rank Fusion) to merge ranked results from both\
+- CrossEncoder reranker to score top-k before passing to LLM\
+- HyDE for query expansion on cold queries\
+\
+Example:\
+    Query: "connection pool exhausted postgres"\
+    BM25 retrieves:   exact keyword match docs (connection, pool, postgres)\
+    Dense retrieves:  semantically similar docs (DB saturation, max connections)\
+    RRF merges both ranked lists into one unified top-10\
+    CrossEncoder picks top-3 most relevant\
+    LLM generates answer grounded in those 3 docs\
+\
+---\
+\
+Q15. What is HyDE and when is it useful?\
+\
+A: HyDE (Hypothetical Document Embeddings) \'97 instead of embedding the raw query, you\
+ask the LLM to generate a hypothetical answer to the query, then embed that and search.\
+Useful when queries are vague or short and direct retrieval quality is poor.\
+\
+Example:\
+    Query:              "k8s pod crash"   \uc0\u8592  too short, poor retrieval\
+    HyDE:               LLM generates: "Kubernetes pod crashes are often caused by\
+                        OOMKilled events, misconfigured resource limits, or failed\
+                        liveness probes..."\
+    Embed that text \uc0\u8594  search \u8594  retrieves much richer, relevant documents\
+    Better than embedding the 3-word query directly.\
+\
+---\
+\
+Q16. How do you evaluate RAG quality?\
+\
+A: I use RAGAS metrics:\
+- Faithfulness: are LLM claims grounded in retrieved context?\
+- Answer Relevancy: does the answer address the question?\
+- Context Recall: did retrieval fetch the right documents?\
+- Context Precision: are the retrieved docs actually useful?\
+\
+Example:\
+    Test case: Q="What is the fix for OOM error?" \
+               Expected answer = "Reduce batch size"\
+               Retrieved docs = [batch_size_guide, memory_tuning, unrelated_doc]\
+    \
+    Faithfulness:      Did LLM say "reduce batch size"? \uc0\u10003 \
+    Context Precision: Was unrelated_doc in top results? \uc0\u10007  \u8594  improve retrieval\
+    This tells you exactly which part of the pipeline to fix.\
+\
+---\
+\
+Q17. How do you chunk documents for a RAG pipeline?\
+\
+A: Depends on the document type. For logs/structured text, fixed-size chunks with overlap.\
+For narrative documents, semantic chunking (SemanticChunker) which splits on topic\
+boundaries rather than arbitrary token counts.\
+\
+Example:\
+    Fixed chunking (logs):\
+        chunk_size=512, overlap=50  \uc0\u8594  consistent, predictable for structured data\
+\
+    Semantic chunking (runbooks):\
+        Splits on topic shift: "Setup" section stays together,\
+        "Troubleshooting" section stays together \'97\
+        not cut mid-paragraph just because token limit was hit.\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 5: HUMAN-IN-THE-LOOP (HITL)\
+----------------------------------------------------------------\
+\
+Q18. How did you implement HITL in your projects?\
+\
+A: Using LangGraph's interrupt_before mechanism. The graph pauses before a specified node,\
+surfaces the agent's output to an SME via Gradio UI. The SME reviews, edits if needed,\
+and resumes the graph with app.update_state() + app.invoke() using the same thread_id.\
+\
+Example:\
+    app = graph.compile(checkpointer=MemorySaver(), interrupt_before=["validate_node"])\
+\
+    # Graph pauses here \'97 SME sees proposed diagnosis in Gradio UI\
+    # SME approves or edits, then:\
+    app.update_state(config, \{"validated_output": sme_approved_text\})\
+    app.invoke(None, config)  # graph resumes from validate_node\
+\
+---\
+\
+Q19. When should HITL be triggered in a production agent?\
+\
+A: Trigger HITL when:\
+- Confidence score is below threshold\
+- Action is irreversible (deleting data, executing a command, creating a ticket)\
+- The task involves sensitive data or compliance scope\
+- It's the first time a new error pattern is encountered\
+\
+Example:\
+    Auto-approve:  agent summarizes an incident report        \uc0\u8594  low risk, no HITL\
+    HITL required: agent proposes to restart a prod database  \uc0\u8594  irreversible, pause for human\
+\
+---\
+\
+Q20. How do you balance automation with control in sensitive environments?\
+\
+A: I use a tiered autonomy model:\
+- Low-risk actions (read, query, summarize) \uc0\u8594  fully automated\
+- Medium-risk (create ticket, send alert) \uc0\u8594  automated with audit log\
+- High-risk (execute remediation, modify config) \uc0\u8594  HITL required\
+\
+Example:\
+    SOC agent triage flow:\
+    Tier 1: Fetch alert + enrich context          \uc0\u8594  automated\
+    Tier 2: Create Jira ticket with diagnosis     \uc0\u8594  automated + logged\
+    Tier 3: Block IP / isolate endpoint           \uc0\u8594  HITL checkpoint, SOC analyst approves\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 6: TOOL CALLING & INTEGRATIONS\
+----------------------------------------------------------------\
+\
+Q21. How does tool calling work in LangChain/LangGraph?\
+\
+A: Tools are Python functions decorated with @tool. They're bound to the LLM with\
+.bind_tools(). The LLM returns a tool_call in its response specifying the tool name and\
+arguments. ToolNode executes the function and returns the result as a ToolMessage.\
+\
+Example:\
+    @tool\
+    def search_logs(query: str) -> str:\
+        """Search historical logs for a given error pattern."""\
+        return vector_db.search(query)\
+\
+    llm_with_tools = llm.bind_tools([search_logs])\
+    # LLM decides when to call search_logs based on the query context\
+\
+---\
+\
+Q22. How do you handle tool failures gracefully?\
+\
+A: I configure ToolNode with handle_tool_errors=True. This catches exceptions and returns\
+an error message as a ToolMessage instead of crashing the graph. The LLM then decides\
+whether to retry, use a fallback tool, or escalate.\
+\
+Example:\
+    tool_node = ToolNode(tools, handle_tool_errors=True)\
+\
+    # If search_logs raises a timeout exception:\
+    # Instead of crash \uc0\u8594  LLM receives:\
+    # ToolMessage: "Error: search_logs timed out after 5s"\
+    # LLM responds: "Retrying with a narrower query..."\
+\
+---\
+\
+Q23. How would you integrate an agent with a third-party security tool like a SIEM?\
+\
+A: I'd wrap the SIEM's REST API as a LangChain tool. The tool handles auth, constructs\
+the query, calls the endpoint, and returns structured results. The agent treats it like any\
+other tool \'97 calls it when needed, parses the output, and reasons on top of it.\
+\
+Example:\
+    @tool\
+    def query_siem(alert_id: str) -> dict:\
+        """Fetch alert details from SIEM by alert ID."""\
+        response = requests.get(\
+            f"\{SIEM_URL\}/alerts/\{alert_id\}",\
+            headers=\{"Authorization": f"Bearer \{API_KEY\}"\}\
+        )\
+        return response.json()\
+\
+    # Agent call: query_siem("ALT-9921")\
+    # Returns: \{"severity": "critical", "source_ip": "10.0.1.4", ...\}\
+\
+---\
+\
+Q24. You integrated Jira in your project \'97 how did that work?\
+\
+A: I wrapped the Jira REST API as a tool. After the agent diagnosed a log failure, it called\
+the create_ticket tool with structured fields \'97 summary, description, priority, suggested fix.\
+The tool hit the Jira API and returned the ticket URL stored in state and surfaced to the user.\
+\
+Example:\
+    @tool\
+    def create_jira_ticket(summary: str, description: str, priority: str) -> str:\
+        """Create a Jira ticket and return its URL."""\
+        payload = \{"summary": summary, "description": description,\
+                   "priority": \{"name": priority\}\}\
+        response = requests.post(JIRA_URL, json=payload, headers=AUTH_HEADERS)\
+        return response.json()["self"]\
+\
+    # Agent output: "Ticket created: https://jira.company.com/browse/OPS-412"\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 7: FAULT TOLERANCE & RELIABILITY\
+----------------------------------------------------------------\
+\
+Q25. How do you make agent workflows fault-tolerant?\
+\
+A: Four layers:\
+1. Tool-level: handle_tool_errors=True + retry with backoff\
+2. Node-level: try/except inside nodes, write error info to state\
+3. Graph-level: conditional fallback edges when confidence is low or errors occur\
+4. System-level: persistent checkpointing so crashed runs can resume\
+\
+Example:\
+    Node-level:\
+        def diagnosis_node(state):\
+            try:\
+                result = llm.invoke(state["messages"])\
+                return \{"diagnosis": result.content\}\
+            except Exception as e:\
+                return \{"diagnosis": None, "error": str(e)\}\
+\
+    Graph-level:\
+        def route(state):\
+            if state.get("error"):\
+                return "fallback_node"\
+            return "action_node"\
+\
+---\
+\
+Q26. What's your approach to observability in agent systems?\
+\
+A: I log every node's input/output, tool calls, latency, and token usage. For production I'd\
+use OpenTelemetry to trace the full agent execution path. LangSmith is also useful for\
+LangChain/LangGraph \'97 it captures every LLM call, tool call, and state transition.\
+\
+Example:\
+    Without observability: agent fails silently, you don't know which node caused it.\
+    With LangSmith tracing:\
+        Run trace shows:\
+        diagnosis_node  \uc0\u8594  1.2s, 800 tokens \u10003 \
+        tool: query_siem \uc0\u8594  4.8s TIMEOUT \u10007   \u8592  bottleneck identified immediately\
+        fallback_node   \uc0\u8594  triggered\
+\
+---\
+\
+Q27. How do you handle hallucination risk in production agents?\
+\
+A: Three approaches:\
+1. Ground every claim in retrieved context \'97 don't let the LLM generate unsupported facts\
+2. Use structured output (Pydantic schemas) to constrain what the LLM can return\
+3. Validate LLM output against known schemas or tool results before acting on it\
+\
+Example:\
+    Instead of:  llm.invoke("What is the fix?")  \uc0\u8592  free-form, can hallucinate\
+    Use:\
+        class DiagnosisOutput(BaseModel):\
+            root_cause: str\
+            confidence: float\
+            suggested_fix: str\
+            source_doc_id: str   \uc0\u8592  forces LLM to cite a source\
+\
+        llm.with_structured_output(DiagnosisOutput).invoke(prompt)\
+        # If source_doc_id doesn't exist in our DB \uc0\u8594  flag as hallucination\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 8: FEDERATED LEARNING (FROM RESUME)\
+----------------------------------------------------------------\
+\
+Q28. What is Federated Learning and what did you build with it?\
+\
+A: FL trains a shared model across distributed nodes without centralizing raw data. Each node\
+trains locally, sends only model updates to an aggregator, which merges them. In my health\
+coach project, I used OpenFL to enable hospitals to collectively improve the model without\
+sharing patient records.\
+\
+Example:\
+    Traditional ML:  Hospital A sends patient data to central server \uc0\u8594  privacy risk\
+    Federated ML:    Hospital A trains locally \uc0\u8594  sends only weight updates\
+                     Hospital B trains locally \uc0\u8594  sends only weight updates\
+                     Aggregator merges updates \uc0\u8594  improved global model\
+                     No raw patient data ever leaves the hospital.\
+\
+---\
+\
+Q29. What was the straggler mitigation work you did?\
+\
+A: In distributed FL, stragglers are slow nodes that delay each training round. I redesigned\
+the aggregation strategy to not wait for all nodes \'97 aggregate once a threshold percentage\
+of nodes report back (e.g., 80%). Slow nodes are deprioritized in the next round.\
+\
+Example:\
+    Without mitigation:  10 nodes, 1 slow node \uc0\u8594  entire round waits 5 extra minutes\
+    With mitigation:     Aggregate when 8/10 nodes report back (80% threshold)\
+                         Round completes on time, slow node catches up in next round\
+                         Per-round latency reduced by ~60%.\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 9: CYBERSECURITY / SRE USE CASES\
+----------------------------------------------------------------\
+\
+Q30. How would you design an agent for incident root cause analysis?\
+\
+A: Pipeline:\
+1. Ingest alert \uc0\u8594  enrich with asset/service metadata via tools\
+2. Retrieve similar past incidents from long-term memory (RAG)\
+3. Correlate with recent deployment events, config changes via API tools\
+4. LLM reasons over enriched context \uc0\u8594  produces ranked RCA hypotheses\
+5. Route to automated runbook if confidence is high, else HITL for SRE review\
+6. Log decision + outcome for future memory\
+\
+Example:\
+    Alert: "auth-svc latency > 2s"\
+    Step 2: RAG finds similar incident from 3 weeks ago \uc0\u8594  "caused by DB connection pool exhaustion"\
+    Step 3: Checks deployment logs \uc0\u8594  new release was pushed 10 mins before alert\
+    Step 4: LLM hypothesis: "New release likely introduced connection leak. Confidence: 0.89"\
+    Step 5: Confidence > 0.85 \uc0\u8594  auto-trigger runbook: restart auth-svc pod\
+\
+---\
+\
+Q31. How would you approach runbook automation with agents?\
+\
+A: Runbooks are structured as tool sequences. I'd represent each runbook step as a tool,\
+with preconditions checked before execution. The agent selects the right runbook via RAG,\
+then executes steps sequentially with state tracking. Irreversible steps get HITL checkpoint.\
+\
+Example:\
+    Runbook: "Restart auth-svc"\
+    Step 1: check_pod_status("auth-svc")          \uc0\u8594  tool call, read-only \u10003  auto\
+    Step 2: cordon_node("node-42")                \uc0\u8594  tool call, reversible \u10003  auto\
+    Step 3: delete_pod("auth-svc-pod-7x9kl")      \uc0\u8594  irreversible \u8594  HITL pause\
+    SRE approves \uc0\u8594  Step 3 executes \u8594  Step 4: verify_pod_healthy() \u8594  done\
+\
+---\
+\
+Q32. How do you handle security and compliance in agent systems?\
+\
+A: Key controls:\
+- Least-privilege tool access \'97 each agent only has access to tools it needs\
+- Audit logging of every tool call and decision with timestamp and user context\
+- Input/output guardrails to prevent prompt injection or sensitive data leakage\
+- HITL before any write/execute action in sensitive environments\
+- Secrets managed via env vars / vault \'97 never hardcoded in agent logic\
+\
+Example:\
+    Read-only agent (triage):   tools = [query_siem, search_kb, get_asset_info]\
+    Action agent (remediation): tools = [create_ticket, restart_pod, block_ip]\
+    These are separate agents with separate tool scopes \'97 the triage agent\
+    physically cannot call restart_pod even if prompted to do so.\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 10: GENERAL / BEHAVIORAL\
+----------------------------------------------------------------\
+\
+Q33. How do you evaluate whether an agentic workflow is production-ready?\
+\
+A: I check:\
+- Task success rate on a held-out eval set\
+- Latency per run (p50, p95)\
+- HITL intervention rate (high = model not confident enough)\
+- Failure mode coverage \'97 every failure path has a defined handler\
+- Auditability \'97 full trace of every decision available\
+- Guardrails tested against adversarial inputs\
+\
+Example:\
+    Before shipping my log analysis agent:\
+    - Ran 200 test log cases \uc0\u8594  91% resolved correctly (threshold was 90%) \u10003 \
+    - p95 latency: 4.2s (acceptable for async use case) \uc0\u10003 \
+    - HITL rate: 12% (reasonable \'97 only truly ambiguous cases escalated) \uc0\u10003 \
+    - Injected malformed logs and prompt injection attempts \uc0\u8594  all handled \u10003 \
+    \uc0\u8594  Approved for production.\
+\
+---\
+\
+Q34. Walk me through how you'd go from a messy operator workflow to a production agent.\
+\
+A: \
+1. Shadow the operator \'97 understand actual steps, decision points, and edge cases\
+2. Map the workflow as a flowchart \'97 identify nodes, branches, tools needed\
+3. Identify what needs LLM reasoning vs. what's deterministic\
+4. Build a minimal LangGraph prototype with mocked tools\
+5. Swap in real tools, test on real data\
+6. Add HITL at high-risk nodes, add evals, instrument observability\
+7. Run in shadow mode (agent suggests, human acts) before full autonomy\
+8. Promote to production once success rate and safety criteria are met\
+\
+Example:\
+    Messy workflow: SOC analyst manually copies alert from SIEM into Slack,\
+                    googles the IP, checks if it's in threat intel DB, writes a\
+                    summary, and posts it to a ticket.\
+    \
+    Productized:    Agent auto-fetches alert \uc0\u8594  tool calls SIEM + threat intel API\
+                    \uc0\u8594  LLM writes summary \u8594  auto-creates ticket. \
+                    What took 15 mins now takes 20 seconds.\
+\
+---\
+\
+Q35. What's your approach to prompt engineering for agents?\
+\
+A: I treat prompts like code \'97 versioned, tested, iterated. Key practices:\
+- Concrete examples > abstract descriptions in system prompts\
+- Explicit output schema with a JSON example, not just field descriptions\
+- Separate system prompt (role/context) from task prompt (current input)\
+- Test prompt changes against an eval set before shipping\
+\
+Example:\
+    Bad system prompt:\
+        "Return a JSON with root_cause, confidence, and fix fields."\
+\
+    Good system prompt:\
+        "Return ONLY valid JSON in this exact format:\
+         \{\
+           'root_cause': 'brief description of what caused the issue',\
+           'confidence': 0.87,\
+           'fix': 'specific remediation step'\
+         \}\
+         No explanation, no markdown, no extra fields."\
+\
+    Second version cuts JSON parse failures from 15% to under 1%.\
+\
+---\
+\
+Q36. How do you handle cost and latency optimization in LLM-heavy pipelines?\
+\
+A: \
+- Semantic caching for repeated/similar queries\
+- Use smaller/faster models for low-complexity nodes (routing, classification)\
+- Reserve large models (GPT-4/Claude) for reasoning-heavy nodes only\
+- Batch tool calls where possible instead of sequential\
+- Monitor token usage per node to find expensive bottlenecks\
+\
+Example:\
+    Before optimization:\
+        Every node uses GPT-4 \uc0\u8594  avg run cost $0.08, latency 8s\
+\
+    After optimization:\
+        Routing node:    GPT-3.5  (classify intent, simple task)\
+        Enrichment node: GPT-3.5  (structured extraction)\
+        Reasoning node:  GPT-4    (complex diagnosis only)\
+        + semantic cache hits 40% of repeat queries\
+        \uc0\u8594  avg run cost $0.02, latency 3.5s\
+\
+---\
+\
+Q37. What frameworks have you used and how do you choose between them?\
+\
+A: Primarily LangGraph and LangChain. LangGraph for stateful, cyclic, production-grade\
+agent workflows \'97 explicit control over state and routing. LangChain for chains, tool\
+wrappers, and retrieval components. CrewAI for quick role-based prototyping but not for\
+complex production workflows due to less control. LlamaIndex for retrieval-heavy,\
+document-centric workflows.\
+\
+Example:\
+    Use LangGraph when:  workflow has loops, conditional routing, HITL, persistent state\
+                         e.g., a triage agent that retries diagnosis if confidence is low\
+\
+    Use CrewAI when:     quick prototype, simple role-based delegation, no complex state\
+                         e.g., "researcher + writer" demo in a hackathon\
+\
+    Use LlamaIndex when: the core value is document retrieval and knowledge grounding\
+                         e.g., Q&A over 10,000 internal runbooks\
+\
+---\
+\
+================================================================\
+END OF Q&A PREP \'97 GOOD LUCK ISHANT!\
+================================================================}
