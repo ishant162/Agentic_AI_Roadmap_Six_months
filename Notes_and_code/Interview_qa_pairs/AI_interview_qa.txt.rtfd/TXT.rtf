@@ -1,8 +1,14 @@
 {\rtf1\ansi\ansicpg1252\cocoartf2869
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\froman\fcharset0 Times-Bold;\f2\froman\fcharset0 Times-Roman;
+\f3\fmodern\fcharset0 Courier;\f4\fnil\fcharset0 HelveticaNeue;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red109\green109\blue109;\red0\green0\blue0;
+}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;\cssrgb\c50196\c50196\c50196;\cssrgb\c0\c0\c0\c84706;
+}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}
+{\list\listtemplateid2\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid101\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid2}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}}
+\paperw11900\paperh16840\margl1440\margr1440\vieww29200\viewh18460\viewkind0
 \pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
 
 \f0\fs24 \cf0 ================================================================\
@@ -699,6 +705,441 @@ Example:\
                          e.g., Q&A over 10,000 internal runbooks\
 \
 ---\
+\
+----------------------------------------------------------------\
+SECTION 11: PROJECTS\
+----------------------------------------------------------------\
+\
+Q38. Tell me about your projects.\
+\
+A: I've built two end-to-end agentic AI systems.\
+\
+First \'97 Agentic AI Test Analysis Framework (Feb\'96Apr 2026):\
+The problem was engineers spending hours manually debugging test logs. I built a LangGraph\
+state machine that automatically parses logs, semantically diagnoses root causes, and creates\
+Jira tickets with suggested fixes. Key pieces: a multi-layered memory architecture using\
+ChromaDB and FAISS so the agent learns from past resolutions, a synthetic data engine to\
+handle rare error patterns (cold-start problem), and a HITL validation layer for SME\
+feedback. Reduced manual debugging time by 80%.\
+\
+Second \'97 Agentic AI Personal Health Coach (Jun\'96Aug 2025):\
+Built an LLM-powered post-discharge companion for patients. The core challenge was privacy\
+\'97 hospitals can't share patient data. I integrated Federated Learning via OpenFL so each\
+hospital trains locally and only shares model updates, not raw records. The agent handled\
+follow-ups, vitals tracking, and medication reminders using a simulated EHR system.\
+\
+Example:\
+    Test Analysis Framework in one line:\
+    "Broken log goes in \uc0\u8594  agent diagnoses it, checks memory for past fixes,\
+     creates Jira ticket with solution \uc0\u8594  engineer gets a ready-to-act ticket."\
+\
+    Health Coach in one line:\
+    "Patient discharged \uc0\u8594  agent sends personalized recovery reminders,\
+     tracks vitals, flags anomalies to doctor \'97 all without sharing raw health data."\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 12: TRANSFORMER ARCHITECTURE & FUNDAMENTALS\
+----------------------------------------------------------------\
+\
+Q39. Explain Transformer architecture with high-level steps.\
+\
+A: A Transformer processes input in parallel (unlike RNNs which are sequential). High-level\
+flow for a standard encoder-decoder Transformer:\
+\
+1. Input Embedding      \'97 convert tokens to dense vectors\
+2. Positional Encoding  \'97 inject position information into embeddings\
+3. Encoder Stack        \'97 N layers of (Multi-Head Attention + Feed Forward + LayerNorm)\
+                          Builds a rich contextual representation of the input\
+4. Decoder Stack        \'97 N layers of (Masked Self-Attention + Cross-Attention + Feed Forward)\
+                          Generates output tokens one at a time, attending to encoder output\
+5. Linear + Softmax     \'97 project to vocabulary size, pick next token\
+\
+Example:\
+    Translation: "I am happy" \uc0\u8594  "Je suis heureux"\
+\
+    Encoder reads "I am happy" all at once \uc0\u8594  builds context vectors\
+    Decoder generates one token at a time:\
+        Step 1: [START] \uc0\u8594  attends to encoder \u8594  predicts "Je"\
+        Step 2: [START, Je] \uc0\u8594  attends to encoder \u8594  predicts "suis"\
+        Step 3: [START, Je, suis] \uc0\u8594  predicts "heureux"\
+        Step 4: predicts [END]\
+\
+---\
+\
+Q40. What is Multi-Head Attention and why do we need multiple heads?\
+\
+A: Attention computes how much each token should "focus on" every other token when building\
+its representation. The formula is:\
+    Attention(Q, K, V) = softmax(QK\uc0\u7488  / \u8730 d_k) \'b7 V\
+\
+Multi-head attention runs this in parallel H times with different learned projection matrices.\
+Each head learns to attend to different types of relationships simultaneously.\
+\
+Why multiple heads?\
+A single attention head can only capture one type of relationship at a time. Multiple heads\
+let the model learn different relationship types in parallel and concatenates the results.\
+\
+Example:\
+    Sentence: "The bank by the river was steep."\
+\
+    Head 1 might focus on:  syntactic relationships  ("bank" \uc0\u8592  subject of "was")\
+    Head 2 might focus on:  semantic context         ("bank" near "river" \uc0\u8594  not financial)\
+    Head 3 might focus on:  coreference              (linking pronouns to nouns)\
+\
+    With only 1 head, the model has to pick one focus. With 8 heads, it captures all of\
+    them simultaneously \'97 making the representation much richer.\
+\
+---\
+\
+Q41. What is Positional Encoding and why do Transformers need it? How do RNNs manage without it?\
+\
+A: Transformers process all tokens in parallel \'97 there's no inherent notion of order. Without\
+positional encoding, "dog bites man" and "man bites dog" would look identical to the model.\
+Positional Encoding adds a position-dependent signal to each token embedding so the model\
+knows where each token sits in the sequence.\
+\
+Original Transformers use sinusoidal functions:\
+    PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))\
+    PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))\
+Modern LLMs use Rotary Positional Encoding (RoPE) or learned embeddings instead.\
+\
+How do RNNs manage without it?\
+RNNs process tokens sequentially \'97 one at a time, left to right. The hidden state at step t\
+is computed from the hidden state at step t-1. Order is baked into the architecture itself \'97\
+the model physically cannot see token 5 before token 4. So position is implicit.\
+\
+Example:\
+    RNN processing "I am happy":\
+        h1 = f(embed("I"),  h0)\
+        h2 = f(embed("am"), h1)   \uc0\u8592  h1 already encodes that "am" comes after "I"\
+        h3 = f(embed("happy"), h2)\
+    Order is enforced structurally \'97 no explicit encoding needed.\
+\
+    Transformer processing "I am happy":\
+        All three tokens processed simultaneously.\
+        Without PE: model sees three vectors with no order \uc0\u8594  "am I happy" = "I am happy"\
+        With PE:    each vector gets a unique positional signal added \uc0\u8594  order is preserved.\
+\
+---\
+\
+Q42. What is the difference between an Encoder and a Decoder in Transformers?\
+\
+A: \
+Encoder:\
+- Reads the full input all at once (bidirectional attention)\
+- Every token can attend to every other token\
+- Builds a rich contextual representation of the input\
+- Used for: understanding tasks (classification, NER, embeddings)\
+\
+Decoder:\
+- Generates output one token at a time (autoregressive)\
+- Uses masked self-attention \'97 can only attend to past tokens, not future ones\
+  (prevents cheating during training)\
+- Also attends to encoder output via cross-attention (in encoder-decoder models)\
+- Used for: generation tasks (text generation, translation, summarization)\
+\
+Example:\
+    Encoder-only model:  BERT\
+    Task: sentiment classification of "The movie was great"\
+    All tokens attend to all others \uc0\u8594  rich bidirectional context \u8594  classify as Positive\
+\
+    Decoder-only model:  GPT, Claude, LLaMA\
+    Task: complete "The sky is"\
+    Generates tokens left to right \'97 "blue", then "and", then "clear"\
+    Each new token only sees what came before it.\
+\
+    Encoder-Decoder model: T5, original Transformer (translation)\
+    Encoder reads source language \uc0\u8594  Decoder generates target language\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 13: LLM EVALUATION & SAFETY\
+----------------------------------------------------------------\
+\
+Q43. How do you check if the output of an LLM is biased?\
+\
+A: Bias in LLM output can be demographic, representation, or framing bias. Approaches:\
+\
+1. Counterfactual testing \'97 swap protected attributes, check if output changes\
+2. Demographic parity \'97 does the model perform equally well across groups?\
+3. Representation audit \'97 does generated content over/under-represent certain groups?\
+4. Toxicity scoring \'97 tools like Perspective API or Detoxify to score outputs\
+5. Human evaluation \'97 domain experts review outputs for subtle bias\
+\
+Example:\
+    Counterfactual test:\
+        Prompt A: "Write a performance review for John, a software engineer."\
+        Prompt B: "Write a performance review for Priya, a software engineer."\
+\
+        If Prompt A outputs stronger leadership language and Prompt B outputs\
+        more collaborative/supportive language with no other changes \'97 that's\
+        gender bias. The only variable changed was the name.\
+\
+    Demographic parity test:\
+        Run 100 loan approval scenarios with identical financials but varying names\
+        (signaling different ethnicities). If approval rate differs across groups \uc0\u8594  bias.\
+\
+---\
+\
+Q44. How do you perform data validation in a GenAI pipeline?\
+\
+A: Data validation happens at multiple stages:\
+\
+1. Input validation   \'97 schema checks, type checks, length limits, sanitize for injection\
+2. Retrieval validation \'97 verify retrieved chunks are from trusted sources, check relevance score\
+3. Output validation  \'97 structured output with Pydantic, check required fields exist,\
+                        confidence thresholds, hallucination checks\
+4. Post-action validation \'97 after tool execution, verify the expected state change occurred\
+\
+Example:\
+    Input validation:\
+        class UserQuery(BaseModel):\
+            query: str = Field(min_length=3, max_length=500)\
+            session_id: str\
+\
+        # Rejects empty queries, suspiciously long inputs, or missing fields\
+\
+    Output validation:\
+        class AgentOutput(BaseModel):\
+            root_cause: str\
+            confidence: float = Field(ge=0.0, le=1.0)\
+            fix: str\
+            source_doc_id: str   \uc0\u8592  if this ID doesn't exist in our DB \u8594  flag hallucination\
+\
+    Post-action validation:\
+        After agent restarts a pod:\
+            status = check_pod_status("auth-svc")\
+            assert status == "Running"   \uc0\u8592  verify action had intended effect\
+\
+---\
+\
+Q45. How do you evaluate your GenAI solution end-to-end?\
+\
+A: I evaluate at three levels:\
+\
+1. Component-level:\
+   - RAG: RAGAS metrics (faithfulness, answer relevancy, context recall, context precision)\
+   - LLM output: task success rate on a labeled eval set, structured output validity\
+\
+2. System-level:\
+   - End-to-end task success rate (did the agent solve the problem correctly?)\
+   - Latency (p50, p95 per run)\
+   - HITL intervention rate (proxy for model confidence)\
+   - Cost per run (token usage)\
+\
+3. Behavioral/Safety:\
+   - Adversarial input testing (prompt injection, jailbreaks, malformed inputs)\
+   - Bias testing (counterfactual probes)\
+   - Hallucination rate (LLM claims not grounded in retrieved context)\
+\
+Example:\
+    For my log analysis agent eval set of 200 test cases:\
+        Task success rate:     91%  \uc0\u10003   (threshold: 90%)\
+        Faithfulness (RAGAS):  0.88 \uc0\u10003   (threshold: 0.85)\
+        p95 latency:           4.2s \uc0\u10003   (acceptable for async)\
+        HITL rate:             12%  \uc0\u10003   (only truly ambiguous cases escalated)\
+        Hallucination rate:    3%   \uc0\u10003   (structured output + source citation enforced)\
+    \uc0\u8594  Cleared for production.\
+\
+---\
+\
+----------------------------------------------------------------\
+SECTION 14: ML FUNDAMENTALS\
+----------------------------------------------------------------\
+\
+Q46. What is the difference between RNN and LSTM?\
+\
+A:\
+RNN (Recurrent Neural Network):\
+- Processes sequences step by step, maintaining a hidden state h_t\
+- h_t = tanh(W_h \'b7 h_(t-1) + W_x \'b7 x_t)\
+- Problem: vanishing gradient \'97 gradients shrink exponentially as they backpropagate\
+  through many steps \uc0\u8594  model forgets long-range dependencies\
+\
+LSTM (Long Short-Term Memory):\
+- Adds a cell state (c_t) \'97 a separate "memory highway" alongside hidden state\
+- Uses three gates to control information flow:\
+    Forget gate:  how much of past cell state to erase\
+    Input gate:   how much of new info to write to cell state\
+    Output gate:  what part of cell state to expose as hidden state\
+- Gates prevent vanishing gradients \uc0\u8594  LSTMs can remember dependencies 100s of steps back\
+\
+Example:\
+    Task: predict the last word \uc0\u8594  "I grew up in France... I speak fluent ___"\
+    \
+    RNN:  by the time it reaches "speak", the context "France" from far back has\
+          largely vanished from the hidden state \uc0\u8594  likely predicts a generic word\
+    \
+    LSTM: "France" is written to the cell state at step 5, the forget gate keeps it\
+          alive across all intermediate steps, and it's still available at "speak"\
+          \uc0\u8594  correctly predicts "French"\
+\
+---\
+\
+Q47. Are LLMs bad at classification? If yes, why?\
+\
+A: LLMs can do classification, but they're often suboptimal compared to fine-tuned\
+discriminative models. Here's why:\
+\
+Reasons LLMs underperform on classification:\
+1. They're generative, not discriminative \'97 trained to predict the next token, not to\
+   output a probability distribution over fixed labels\
+2. Sensitivity to prompt wording \'97 "Is this positive or negative?" vs "Classify sentiment"\
+   can yield different results on the same input\
+3. Calibration issues \'97 LLM confidence doesn't reliably map to actual probability of\
+   being correct\
+4. Latency and cost \'97 a fine-tuned BERT does classification in ~50ms for fractions of\
+   a cent; GPT-4 takes 1-2s and costs 10-100x more\
+5. Label hallucination \'97 LLM might return a label outside the defined set if not\
+   constrained\
+\
+When LLMs ARE useful for classification:\
+- Zero-shot or few-shot scenarios with no labeled training data\
+- Complex multi-label or nuanced classification where rules are hard to define\
+- When the label set changes dynamically\
+\
+Example:\
+    Binary sentiment on 10,000 product reviews:\
+    Fine-tuned DistilBERT: 94% accuracy, 40ms/sample, $0.0001/call  \uc0\u8592  better choice\
+    GPT-4:                 93% accuracy, 1.5s/sample,  $0.01/call\
+\
+    BUT \'97 if you need to classify a support ticket into 50 dynamic categories that\
+    change monthly, LLM zero-shot wins because retraining a classifier every month\
+    is impractical.\
+\
+---\
+\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Q: What was the most challenging work you did and how did you solve it?
+\f2\b0 \
+\pard\pardeftab720\partightenfactor0
+\cf3 \strokec3 \
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 \strokec2 The most challenging work was building 
+\f1\b FederatedRuntime
+\f2\b0  for OpenFL, Intel's open-source Federated Learning framework \'97 it's a merged PR in the official repository.\
+
+\f1\b The Problem:
+\f2\b0  Data scientists had to maintain two separate codebases \'97 one for local simulation, one for distributed deployment. The goal was simple: write your experiment once in a Jupyter notebook \
+and deploy the same code to distributed nodes without changing anything.\
+
+\f1\b Why it was hard \'97 three things at once:
+\f2\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0
+\f1\b \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Architecture from scratch
+\f2\b0  \'97 I designed and built three new components: Director, Envoy, and FederatedRuntime, with gRPC transport and mTLS security. Nothing existed to build on.\
+\ls1\ilvl0
+\f1\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Async refactoring
+\f2\b0  \'97 The existing Aggregator was synchronous. I had to refactor it to asyncio while keeping it backward-compatible with existing workflows.\
+\ls1\ilvl0
+\f1\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Distributed-only bugs
+\f2\b0  \'97 Collaborators dropping connection on experiment completion, checkpoint not initializing, workspace errors on redeploy. None of these reproduced locally \'97 only in actual distributed runs.\
+\pard\tx720\pardeftab720\partightenfactor0
+\cf0 \
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 How I solved it:
+\f2\b0 \
+Built and validated each component in isolation before wiring them together. For the async refactoring, ran the old and new Aggregator in parallel against the same test cases until outputs matched. \
+For distributed bugs, set up a 4-node WSL environment to reproduce each failure deterministically, then fixed the gRPC shutdown handshake and the async initialization ordering.\
+
+\f1\b Outcome:
+\f2\b0  PR merged into the official OpenFL repo. One line change \'97 
+\f3\fs26 LocalRuntime
+\f2\fs24  to 
+\f3\fs26 FederatedRuntime
+\f2\fs24  \'97 and the same experiment runs on distributed infrastructure.\
+\
+Q: Straggler Handling\
+Another challenging piece was 
+\f1\b straggler handling in OpenFL's Federated Learning framework
+\f2\b0  \'97 two merged PRs in the official repository.\
+
+\f1\b The Problem:
+\f2\b0  In distributed FL, a training round can't complete until all collaborating nodes finish their tasks. One slow node \'97 a straggler \'97 blocks every other node and tanks throughput. \
+There was no mechanism to handle this. The framework just waited indefinitely.\
+
+\f1\b Why it was hard:
+\f2\b0 \
+The fix sounds simple \'97 add a timeout. But FL training rounds are stateful and cyclical. The core challenge was: 
+\f3\fs26 threading.Timer
+\f2\fs24  can only be started once per object. \
+So every round, you can't just restart the same timer \'97 you have to delete the old object and instantiate a new one. Getting this lifecycle wrong meant the policy either fired at the \
+wrong time, didn't fire at all, or leaked memory across rounds.\
+On top of that, the Aggregator wasn't tracking which collaborators had finished 
+\f1\b all
+\f2\b0  tasks vs. just one task. Without fixing that, the cutoff logic would trigger prematurely \'97 \
+cutting off nodes that were mid-task, not actually stragglers.\
+There was also a thread-safety issue \'97 multiple collaborators reporting results concurrently could race on the shared completion state. Had to introduce a 
+\f3\fs26 Lock
+\f2\fs24  around collaborator tracking.\
+
+\f1\b How I solved it:
+\f2\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls2\ilvl0\cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Added a 
+\f3\fs26 start_policy
+\f2\fs24  interface to 
+\f3\fs26 StragglerHandlingFunction
+\f2\fs24  so policies are pluggable\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Implemented 
+\f3\fs26 CutoffTimeBasedStragglerHandling
+\f2\fs24  with 
+\f3\fs26 threading.Timer
+\f2\fs24  \'97 timer fires a callback after cutoff, which applies the policy only if minimum reporting threshold is met\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Fixed the Aggregator to track collaborators that completed 
+\f1\b all
+\f2\b0  assigned tasks, not just the first one\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Used 
+\f3\fs26 time.monotonic()
+\f2\fs24  for reliable elapsed time tracking (reviewer suggestion I incorporated)\
+\ls2\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 In the follow-up PR, consolidated all policies into a single module, cleaned up the architecture based on code review feedback, and ran full regression tests\
+\pard\tx720\pardeftab720\partightenfactor0
+\cf0 \strokec2 \
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 Outcome:
+\f2\b0  Both PRs merged into the official OpenFL repo. The framework now supports configurable straggler policies \'97 rounds complete on time even when slow nodes are present, without blocking the entire federation.\
+\pard\pardeftab720\qc\partightenfactor0
+
+\f4\fs22 \cf4 \strokec4 \
+\
+\
+\
+\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs24 \cf0 \strokec2 \
+\
+\
+\
+\pard\pardeftab720\qc\partightenfactor0
+
+\f4\fs22 \cf4 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+
+\f2\fs24 \cf0 \strokec2 \
+\
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 \strokec2 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 \
 \
 ================================================================\
 END OF Q&A PREP \'97 GOOD LUCK ISHANT!\
